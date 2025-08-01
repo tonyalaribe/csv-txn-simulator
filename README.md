@@ -39,15 +39,19 @@ cargo run -- input.csv
 5. I use property based testing both as a means of benchmarking and as a way to assert that certain properties always hold:
    - Irrespective of what transactions are executed, the accounts total will always e the sum of the available and the held amounts.
    - Irrespective of the withdrawals and deposit orders, we will never have negative amounts in available, held or total balances.
-6. Benchmarking. Property based testing allows generating arbitrary values for tests based on properties we decide on. Which means we can generate huge amounts of test data without an explicit mocking or faker script. This was then used to benchmark the process_transactions logic. Ignoring the csv parsing timelines, the benchmark results in the following:
+6. Benchmarking. Property based testing allows generating arbitrary values for tests based on properties we decide on. Which means we can generate huge amounts of test data without an explicit mocking or faker script. This was then used to benchmark the process_transactions logic.
 
-```
-Processed 100k transactions in 69.370625ms (1441532 tx/sec)
-Processed 100k transactions in 68.313125ms (1463848 tx/sec)
-Processed 100k transactions in 68.34425ms (1463181 tx/sec)
-Processed 100k transactions in 68.310333ms (1463907 tx/sec)
-Processed 100k transactions in 68.035916ms (1469812 tx/sec)
-Processed 100k transactions in 69.334083ms (1442292 tx/sec)
-```
+   You can run it like this: `cargo test prop_large_volume_benchmark -- --nocapture`
 
-So, we process 1.4 million transactions per second.
+   Ignoring the csv parsing timelines, the benchmark results in the following:
+
+   ```
+   Processed 100k transactions in 69.370625ms (1441532 tx/sec)
+   Processed 100k transactions in 68.313125ms (1463848 tx/sec)
+   Processed 100k transactions in 68.34425ms (1463181 tx/sec)
+   Processed 100k transactions in 68.310333ms (1463907 tx/sec)
+   Processed 100k transactions in 68.035916ms (1469812 tx/sec)
+   Processed 100k transactions in 69.334083ms (1442292 tx/sec)
+   ```
+
+   So, we process 1.4 million transactions per second.
