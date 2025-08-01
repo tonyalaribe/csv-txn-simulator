@@ -62,8 +62,13 @@ fn process_transactions(transactions: impl Iterator<Item = Input>) -> HashMap<u1
                 if let Some(amount) = txn.amount {
                     let is_deposit = matches!(txn.r#type, InputType::Deposit);
                     if is_deposit || account.available >= amount {
-                        let (add, sub) = if is_deposit { (amount, Decimal::ZERO) } else { (Decimal::ZERO, amount) };
-                        account.available = account.available.saturating_add(add).saturating_sub(sub);
+                        let (add, sub) = if is_deposit {
+                            (amount, Decimal::ZERO)
+                        } else {
+                            (Decimal::ZERO, amount)
+                        };
+                        account.available =
+                            account.available.saturating_add(add).saturating_sub(sub);
                         account.total = account.total.saturating_add(add).saturating_sub(sub);
                         txn_history.insert(txn.tx, (txn.client, amount, false));
                     }
@@ -142,7 +147,7 @@ mod tests {
     #[case::saturation(vec![(InputType::Deposit, 1, 1, Some(Decimal::MAX)), (InputType::Deposit, 1, 2, Some(dec!(1)))], 1, Decimal::MAX, dec!(0), Decimal::MAX, false)]
     #[case::cross_client_dispute(vec![(InputType::Deposit, 1, 1, Some(dec!(10))), (InputType::Dispute, 2, 1, None)], 1, dec!(10), dec!(0), dec!(10), false)]
     #[case::precision_4_decimals(vec![(InputType::Deposit, 1, 1, Some(dec!(1.2345))), (InputType::Withdrawal, 1, 2, Some(dec!(0.1234)))], 1, dec!(1.1111), dec!(0), dec!(1.1111), false)]
-    #[case::chronological_order(vec![(InputType::Deposit, 1, 2, Some(dec!(10))), (InputType::Deposit, 1, 1, Some(dec!(5)))], 1, dec!(15), dec!(0), dec!(15), false)]
+    #[case::chronological_order(vec![(InputType::Deposit, 1, 2, Some(dec!(10))), (InputType::Withdrawal, 1, 1, Some(dec!(8)))], 1, dec!(2), dec!(0), dec!(2), false)]
     fn test_transactions(
         #[case] txns: Vec<(InputType, u16, u32, Option<Decimal>)>,
         #[case] client: u16,
@@ -151,7 +156,15 @@ mod tests {
         #[case] expected_total: Decimal,
         #[case] expected_locked: bool,
     ) {
-        let inputs: Vec<_> = txns.into_iter().map(|(r#type, client, tx, amount)| Input { r#type, client, tx, amount }).collect();
+        let inputs: Vec<_> = txns
+            .into_iter()
+            .map(|(r#type, client, tx, amount)| Input {
+                r#type,
+                client,
+                tx,
+                amount,
+            })
+            .collect();
         let accounts = process_transactions(inputs.into_iter());
         let acc = &accounts[&client];
         assert_eq!(acc.available, expected_available);
@@ -159,11 +172,9 @@ mod tests {
         assert_eq!(acc.total, expected_total);
         assert_eq!(acc.locked, expected_locked);
     }
-    
-    use quickcheck::{Arbitrary, Gen};
-    
-    impl Arbitrary for InputType {
-        fn arbitrary(g: &mut Gen) -> Self {
+
+    impl quickcheck::Arbitrary for InputType {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
             match u32::arbitrary(g) % 5 {
                 0 => InputType::Deposit,
                 1 => InputType::Withdrawal,
@@ -173,36 +184,40 @@ mod tests {
             }
         }
     }
-    
-    impl Arbitrary for Input {
-        fn arbitrary(g: &mut Gen) -> Self {
+
+    impl quickcheck::Arbitrary for Input {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
             let r#type = InputType::arbitrary(g);
             Input {
                 r#type,
                 client: u16::arbitrary(g) % 100 + 1,
                 tx: u32::arbitrary(g) % 10000 + 1,
-                amount: matches!(r#type, InputType::Deposit | InputType::Withdrawal)
-                    .then(|| Decimal::from_f64_retain(f64::arbitrary(g).abs() % 10000.0 + 0.01).unwrap_or(Decimal::ONE)),
+                amount: matches!(r#type, InputType::Deposit | InputType::Withdrawal).then(|| {
+                    Decimal::from_f64_retain(f64::arbitrary(g).abs() % 10000.0 + 0.01)
+                        .unwrap_or(Decimal::ONE)
+                }),
             }
         }
     }
-    
+
     #[quickcheck_macros::quickcheck]
     fn prop_total_equals_available_plus_held(txns: Vec<Input>) -> bool {
         let accounts = process_transactions(txns.into_iter());
-        accounts.values().all(|acc| acc.total == acc.available.saturating_add(acc.held))
+        accounts
+            .values()
+            .all(|acc| acc.total == acc.available.saturating_add(acc.held))
     }
-    
+
     #[quickcheck_macros::quickcheck]
     fn prop_no_negative_balances(txns: Vec<Input>) -> bool {
         let accounts = process_transactions(txns.into_iter());
         accounts.values().all(|acc| {
-            acc.available >= Decimal::ZERO && 
-            acc.held >= Decimal::ZERO && 
-            acc.total >= Decimal::ZERO
+            acc.available >= Decimal::ZERO
+                && acc.held >= Decimal::ZERO
+                && acc.total >= Decimal::ZERO
         })
     }
-    
+
     #[test]
     fn test_spec_example() {
         let csv = "type, client, tx, amount
@@ -211,25 +226,77 @@ deposit, 2, 2, 2.0
 deposit, 1, 3, 2.0
 withdrawal, 1, 4, 1.5
 withdrawal, 2, 5, 3.0";
-        
-        let mut rdr = csv::ReaderBuilder::new().trim(csv::Trim::All).from_reader(csv.as_bytes());
+
+        let mut rdr = csv::ReaderBuilder::new()
+            .trim(csv::Trim::All)
+            .from_reader(csv.as_bytes());
         let accounts = process_transactions(rdr.deserialize::<Input>().filter_map(Result::ok));
-        
-        assert_eq!((accounts[&1].available, accounts[&1].total), (dec!(1.5), dec!(1.5)));
-        assert_eq!((accounts[&2].available, accounts[&2].total), (dec!(2.0), dec!(2.0)));
+
+        assert_eq!(
+            (accounts[&1].available, accounts[&1].total),
+            (dec!(1.5), dec!(1.5))
+        );
+        assert_eq!(
+            (accounts[&2].available, accounts[&2].total),
+            (dec!(2.0), dec!(2.0))
+        );
     }
-    
+
     #[test]
     fn test_performance() {
         use std::time::Instant;
         let start = Instant::now();
         let accounts = process_transactions((0..1_000_000).map(|i| Input {
-            r#type: if i % 2 == 0 { InputType::Deposit } else { InputType::Withdrawal },
+            r#type: if i % 2 == 0 {
+                InputType::Deposit
+            } else {
+                InputType::Withdrawal
+            },
             client: (i % 10000) as u16,
             tx: i as u32,
             amount: Some(Decimal::from(i % 100 + 1)),
         }));
         assert!(start.elapsed().as_secs() < 2);
         assert_eq!(accounts.len(), 10000);
+    }
+
+    #[quickcheck_macros::quickcheck]
+    fn prop_large_volume_benchmark(seed: u64) -> bool {
+        use std::time::Instant;
+        let txns = (0..100_000).map(|i| Input {
+            r#type: [
+                InputType::Deposit,
+                InputType::Withdrawal,
+                InputType::Dispute,
+                InputType::Resolve,
+                InputType::Chargeback,
+            ][(seed.wrapping_add(i).wrapping_mul(7)) as usize % 5],
+            client: (seed.wrapping_add(i) % 1000 + 1) as u16,
+            tx: i as u32,
+            amount: matches!(
+                [
+                    InputType::Deposit,
+                    InputType::Withdrawal,
+                    InputType::Dispute,
+                    InputType::Resolve,
+                    InputType::Chargeback
+                ][(seed.wrapping_add(i).wrapping_mul(7)) as usize % 5],
+                InputType::Deposit | InputType::Withdrawal
+            )
+            .then(|| Decimal::from(seed.wrapping_add(i) % 9999 + 1)),
+        });
+        let start = Instant::now();
+        let accounts = process_transactions(txns);
+        let elapsed = start.elapsed();
+        println!(
+            "Processed 100k transactions in {:?} ({:.0} tx/sec)",
+            elapsed,
+            100000.0 / elapsed.as_secs_f64()
+        );
+        accounts.values().all(|acc| {
+            acc.total == acc.available.saturating_add(acc.held)
+                && acc.available >= Decimal::ZERO
+                && acc.held >= Decimal::ZERO
+        })
     }
 }

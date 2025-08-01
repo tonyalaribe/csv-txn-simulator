@@ -11,7 +11,7 @@ rust_decimal = { version = "1.37.2", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 
 [dev-dependencies]
-rstest = "0.18"
-rust_decimal_macros = "1.37"
-quickcheck = "1.0"
-quickcheck_macros = "1.0"
+rstest = "0.26.1"
+rust_decimal_macros = "1.37.1"
+quickcheck = "1.0.3"
+quickcheck_macros = "1.1.0"
