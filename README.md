@@ -55,3 +55,5 @@ cargo run -- input.csv
    ```
 
    So, we process 1.4 million transactions per second.
+
+> All of the acual implementation logic fits into 125 lines of rust. So I could not rationalize breaking up the main.rs into more files or applying any fancy architectures (like clean code architecture or the likes). Keeping things simple is also a way to make code inherently maintainable.
