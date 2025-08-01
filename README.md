@@ -37,9 +37,9 @@ cargo run -- input.csv
    - check that irrespective of transaction ids, transactions are handled in order of their presence in the csv
 
 5. I use property based testing both as a means of benchmarking and as a way to assert that certain properties always hold:
-6. Irrespective of what transactions are executed, the accounts total will always e the sum of the available and the held amounts.
-7. Irrespective of the withdrawals and deposit orders, we will never have negative amounts in available, held or total balances.
-8. Benchmarking. Property based testing allows generating arbitrary values for tests based on properties we decide on. Which means we can generate huge amounts of test data without an explicit mocking or faker script. This was then used to benchmark the process_transactions logic. Ignoring the csv parsing timelines, the benchmark results in the following:
+   - Irrespective of what transactions are executed, the accounts total will always e the sum of the available and the held amounts.
+   - Irrespective of the withdrawals and deposit orders, we will never have negative amounts in available, held or total balances.
+6. Benchmarking. Property based testing allows generating arbitrary values for tests based on properties we decide on. Which means we can generate huge amounts of test data without an explicit mocking or faker script. This was then used to benchmark the process_transactions logic. Ignoring the csv parsing timelines, the benchmark results in the following:
 
 ```
 Processed 100k transactions in 69.370625ms (1441532 tx/sec)
